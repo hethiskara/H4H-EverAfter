@@ -20,6 +20,7 @@ import { useAuth } from '../src/context/AuthContext';
 const { width, height } = Dimensions.get('window');
 
 export default function SplashScreen() {
+  console.log('[Splash] Screen mounted');
   const router = useRouter();
   const { user, loading } = useAuth();
   
@@ -35,10 +36,13 @@ export default function SplashScreen() {
   const ring2Opacity = useSharedValue(0);
 
   const navigateToNext = () => {
+    console.log('[Splash] Navigate check - Loading:', loading, 'User:', user?.email || 'none');
     if (!loading) {
       if (user) {
+        console.log('[Splash] Navigating to home...');
         router.replace('/home');
       } else {
+        console.log('[Splash] Navigating to login...');
         router.replace('/login');
       }
     }

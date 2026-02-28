@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getAuth, 
   initializeAuth,
@@ -21,21 +21,21 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let app;
-if (getApps().length === 0) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApps()[0];
-}
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Auth with persistence
-let auth;
-if (Platform.OS === 'web') {
+// Initialize Auth with persistence for React Native
+let auth: ReturnType<typeof getAuth>;
+try {
+  if (Platform.OS === 'web') {
+    auth = getAuth(app);
+  } else {
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage)
+    });
+  }
+} catch (error) {
+  // Auth already initialized, get existing instance
   auth = getAuth(app);
-} else {
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage)
-  });
 }
 
 // Initialize Firestore and Storage
@@ -44,5 +44,7 @@ const storage = getStorage(app);
 
 // Google Auth Provider
 const googleProvider = new GoogleAuthProvider();
+
+console.log('[Firebase] Initialized successfully');
 
 export { app, auth, db, storage, googleProvider };
