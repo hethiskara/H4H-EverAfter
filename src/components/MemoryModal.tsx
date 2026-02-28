@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, Alert, ActivityIndicator, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { saveMemory } from '../services/memoryService';
 import { enhanceMemoryWithAI } from '../services/aiService';
-import { pickImage, takePhoto, startRecording, stopRecording, isRecording, uploadMedia, MediaFile, playAudio } from '../services/mediaService';
+import { startRecording, stopRecording } from '../services/mediaService';
 import { Memory } from '../types/memory';
 
 interface MemoryModalProps {
@@ -20,17 +20,15 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
   const [enhancedData, setEnhancedData] = useState<Partial<Memory> | null>(null);
   const [enhancing, setEnhancing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [recording, setRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [uploading, setUploading] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setMode(existingMemories.length > 0 ? 'list' : 'new');
       setText('');
       setEnhancedData(null);
-      setMediaFiles([]);
       setRecording(false);
       setRecordingTime(0);
     }
@@ -61,48 +59,17 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handlePickImage = async () => {
-    try {
-      const file = await pickImage();
-      if (file) {
-        setMediaFiles(prev => [...prev, file]);
-      }
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
-    }
-  };
-
-  const handleTakePhoto = async () => {
-    try {
-      const file = await takePhoto();
-      if (file) {
-        setMediaFiles(prev => [...prev, file]);
-      }
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
-    }
-  };
-
-  const handlePhotoPress = () => {
-    Alert.alert(
-      'Add Photo',
-      'Choose an option',
-      [
-        { text: 'Take Photo', onPress: handleTakePhoto },
-        { text: 'Choose from Library', onPress: handlePickImage },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  };
-
   const handleVoicePress = async () => {
     try {
       if (recording) {
-        const file = await stopRecording();
         setRecording(false);
+        setTranscribing(true);
+        const transcribedText = await stopRecording();
+        setTranscribing(false);
         setRecordingTime(0);
-        if (file) {
-          setMediaFiles(prev => [...prev, file]);
+        
+        if (transcribedText) {
+          setText(prev => prev ? `${prev}\n\n🎤 ${transcribedText}` : `🎤 ${transcribedText}`);
         }
       } else {
         await startRecording();
@@ -110,13 +77,10 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
       }
     } catch (err: any) {
       setRecording(false);
+      setTranscribing(false);
       setRecordingTime(0);
       Alert.alert('Error', err.message);
     }
-  };
-
-  const removeMedia = (index: number) => {
-    setMediaFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleEnhance = async () => {
@@ -136,26 +100,16 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
   };
 
   const handleSave = async () => {
-    if (!text.trim() && mediaFiles.length === 0) {
-      Alert.alert('Empty Memory', 'Please write something or add media');
+    if (!text.trim()) {
+      Alert.alert('Empty Memory', 'Please write or record something first');
       return;
     }
     setSaving(true);
-    setUploading(mediaFiles.length > 0);
     
     try {
-      const mediaURLs: string[] = [];
-      
-      for (const file of mediaFiles) {
-        const url = await uploadMedia(file);
-        mediaURLs.push(url);
-      }
-      
-      setUploading(false);
-      
       await saveMemory({
         date,
-        rawText: text || '(Voice/Photo memory)',
+        rawText: text,
         enhancedText: enhancedData?.enhancedText,
         emotion: enhancedData?.emotion,
         people: enhancedData?.people,
@@ -163,19 +117,17 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
         lifeStage: enhancedData?.lifeStage,
         themes: enhancedData?.themes,
         summary: enhancedData?.summary,
-        mediaURLs,
+        mediaURLs: [],
       });
       
       setText('');
       setEnhancedData(null);
-      setMediaFiles([]);
       onSaved();
       onClose();
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
       setSaving(false);
-      setUploading(false);
     }
   };
 
@@ -186,17 +138,8 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
     }
     setText('');
     setEnhancedData(null);
-    setMediaFiles([]);
     setMode('list');
     onClose();
-  };
-
-  const handlePlayAudio = async (uri: string) => {
-    try {
-      await playAudio(uri);
-    } catch (err: any) {
-      Alert.alert('Error', 'Could not play audio');
-    }
   };
 
   const renderMemoryList = () => (
@@ -226,28 +169,9 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
               </View>
               <Text style={styles.memoryText}>{memory.rawText}</Text>
               
-              {memory.mediaURLs && memory.mediaURLs.length > 0 && (
-                <View style={styles.mediaPreviewRow}>
-                  {memory.mediaURLs.map((url, i) => (
-                    url.includes('.m4a') || url.includes('voice_') ? (
-                      <TouchableOpacity 
-                        key={i} 
-                        style={styles.audioPreview}
-                        onPress={() => handlePlayAudio(url)}
-                      >
-                        <Text style={styles.audioIcon}>🎵</Text>
-                        <Text style={styles.audioText}>Play</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <Image key={i} source={{ uri: url }} style={styles.imagePreview} />
-                    )
-                  ))}
-                </View>
-              )}
-              
               {memory.enhancedText && memory.enhancedText !== memory.rawText && (
                 <View style={styles.enhancedBox}>
-                  <Text style={styles.enhancedLabel}>✨ Enhanced</Text>
+                  <Text style={styles.enhancedLabelSmall}>✨ Enhanced</Text>
                   <Text style={styles.enhancedTextStyle}>{memory.enhancedText}</Text>
                 </View>
               )}
@@ -302,71 +226,43 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
       </View>
 
       <View style={styles.inputSection}>
-        <Text style={styles.label}>What happened?</Text>
+        <View style={styles.inputHeader}>
+          <Text style={styles.label}>What happened?</Text>
+          <TouchableOpacity 
+            style={[styles.voiceBtn, recording && styles.voiceBtnRecording]} 
+            onPress={handleVoicePress}
+            disabled={transcribing}
+            activeOpacity={0.7}
+          >
+            {transcribing ? (
+              <ActivityIndicator color="#A78BFA" size="small" />
+            ) : (
+              <>
+                <Text style={styles.voiceIcon}>{recording ? '⏹️' : '🎤'}</Text>
+                <Text style={[styles.voiceBtnText, recording && styles.voiceBtnTextActive]}>
+                  {recording ? formatRecordingTime(recordingTime) : 'Voice'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
         <TextInput
           style={styles.textInput}
-          placeholder="Write your memory here..."
+          placeholder="Write your memory here or tap Voice to record..."
           placeholderTextColor="#52527A"
           value={text}
           onChangeText={setText}
           multiline
-          numberOfLines={6}
+          numberOfLines={8}
           textAlignVertical="top"
         />
-      </View>
-
-      <View style={styles.mediaSection}>
-        <Text style={styles.label}>Add Media</Text>
-        <View style={styles.mediaButtons}>
-          <TouchableOpacity 
-            style={[styles.mediaBtn, recording && styles.mediaBtnRecording]} 
-            onPress={handleVoicePress}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.mediaIcon}>{recording ? '⏹️' : '🎤'}</Text>
-            <Text style={[styles.mediaBtnText, recording && styles.mediaBtnTextActive]}>
-              {recording ? formatRecordingTime(recordingTime) : 'Voice'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.mediaBtn} 
-            onPress={handlePhotoPress}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.mediaIcon}>📷</Text>
-            <Text style={styles.mediaBtnText}>Photo</Text>
-          </TouchableOpacity>
-          <View style={styles.mediaBtnDisabled}>
-            <Text style={styles.mediaIcon}>🎬</Text>
-            <Text style={styles.mediaBtnTextDisabled}>Soon</Text>
+        {transcribing && (
+          <View style={styles.transcribingBanner}>
+            <ActivityIndicator color="#A78BFA" size="small" />
+            <Text style={styles.transcribingText}>Converting speech to text...</Text>
           </View>
-        </View>
+        )}
       </View>
-
-      {mediaFiles.length > 0 && (
-        <View style={styles.attachedMedia}>
-          <Text style={styles.attachedLabel}>Attached ({mediaFiles.length})</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachedScroll}>
-            {mediaFiles.map((file, index) => (
-              <View key={index} style={styles.attachedItem}>
-                {file.type === 'image' ? (
-                  <Image source={{ uri: file.uri }} style={styles.attachedImage} />
-                ) : (
-                  <View style={styles.attachedAudio}>
-                    <Text style={styles.attachedAudioIcon}>🎵</Text>
-                  </View>
-                )}
-                <TouchableOpacity 
-                  style={styles.removeBtn}
-                  onPress={() => removeMedia(index)}
-                >
-                  <Text style={styles.removeBtnText}>×</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
 
       {enhancedData && (
         <View style={styles.enhancedSection}>
@@ -435,11 +331,11 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
 
         <TouchableOpacity 
           onPress={handleSave} 
-          disabled={saving || (!text.trim() && mediaFiles.length === 0)}
+          disabled={saving || !text.trim()}
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={(text.trim() || mediaFiles.length > 0) ? ['#5B4FC4', '#8B5CF6'] : ['#3D3D5C', '#3D3D5C']}
+            colors={text.trim() ? ['#5B4FC4', '#8B5CF6'] : ['#3D3D5C', '#3D3D5C']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.saveBtn}
@@ -447,12 +343,10 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
             {saving ? (
               <View style={styles.savingRow}>
                 <ActivityIndicator color="#FFF" size="small" />
-                <Text style={styles.saveBtnText}>
-                  {uploading ? ' Uploading...' : ' Saving...'}
-                </Text>
+                <Text style={styles.saveBtnText}> Saving...</Text>
               </View>
             ) : (
-              <Text style={[styles.saveBtnText, (!text.trim() && mediaFiles.length === 0) && styles.saveBtnTextDisabled]}>
+              <Text style={[styles.saveBtnText, !text.trim() && styles.saveBtnTextDisabled]}>
                 Store Memory
               </Text>
             )}
@@ -502,14 +396,8 @@ const styles = StyleSheet.create({
   memoryTime: { fontSize: 12, color: '#6B6B8D' },
   memoryText: { fontSize: 15, color: '#E5E5E5', lineHeight: 22 },
   
-  mediaPreviewRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  imagePreview: { width: 80, height: 80, borderRadius: 10 },
-  audioPreview: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(167,139,250,0.15)', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, gap: 6 },
-  audioIcon: { fontSize: 16 },
-  audioText: { fontSize: 13, color: '#A78BFA', fontWeight: '500' },
-  
   enhancedBox: { backgroundColor: 'rgba(91,79,196,0.1)', borderRadius: 10, padding: 12, marginTop: 12 },
-  enhancedLabel: { fontSize: 11, color: '#A78BFA', fontWeight: '600', marginBottom: 6 },
+  enhancedLabelSmall: { fontSize: 11, color: '#A78BFA', fontWeight: '600', marginBottom: 6 },
   enhancedTextStyle: { fontSize: 14, color: '#CCC', fontStyle: 'italic', lineHeight: 20 },
   themesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   themeBadge: { backgroundColor: 'rgba(255,255,255,0.06)', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 10 },
@@ -520,32 +408,21 @@ const styles = StyleSheet.create({
   addBtnText: { fontSize: 16, color: '#FFF', fontWeight: '600' },
   
   inputSection: { marginBottom: 20 },
-  label: { fontSize: 14, color: '#8888AA', fontWeight: '500', marginBottom: 10 },
-  textInput: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, color: '#FFF', fontSize: 16, minHeight: 120, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  
-  mediaSection: { marginBottom: 16 },
-  mediaButtons: { flexDirection: 'row', gap: 12 },
-  mediaBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  mediaBtnRecording: { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.4)' },
-  mediaBtnDisabled: { flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', opacity: 0.5 },
-  mediaIcon: { fontSize: 22, marginBottom: 4 },
-  mediaBtnText: { fontSize: 11, color: '#8888AA', fontWeight: '500' },
-  mediaBtnTextActive: { color: '#EF4444' },
-  mediaBtnTextDisabled: { fontSize: 11, color: '#6B6B8D', fontWeight: '500' },
-  
-  attachedMedia: { marginBottom: 20 },
-  attachedLabel: { fontSize: 13, color: '#8888AA', fontWeight: '500', marginBottom: 10 },
-  attachedScroll: { flexDirection: 'row' },
-  attachedItem: { marginRight: 12, position: 'relative' },
-  attachedImage: { width: 70, height: 70, borderRadius: 10 },
-  attachedAudio: { width: 70, height: 70, borderRadius: 10, backgroundColor: 'rgba(167,139,250,0.15)', justifyContent: 'center', alignItems: 'center' },
-  attachedAudioIcon: { fontSize: 28 },
-  removeBtn: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center' },
-  removeBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700', marginTop: -2 },
+  inputHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  label: { fontSize: 14, color: '#8888AA', fontWeight: '500' },
+  voiceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(167,139,250,0.15)', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, gap: 6 },
+  voiceBtnRecording: { backgroundColor: 'rgba(239,68,68,0.2)' },
+  voiceIcon: { fontSize: 16 },
+  voiceBtnText: { fontSize: 13, color: '#A78BFA', fontWeight: '600' },
+  voiceBtnTextActive: { color: '#EF4444' },
+  textInput: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, color: '#FFF', fontSize: 16, minHeight: 150, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  transcribingBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(167,139,250,0.1)', padding: 12, borderRadius: 10, marginTop: 10, gap: 10 },
+  transcribingText: { color: '#A78BFA', fontSize: 13 },
   
   enhancedSection: { backgroundColor: 'rgba(91,79,196,0.1)', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(91,79,196,0.2)' },
   enhancedTitle: { fontSize: 16, fontWeight: '600', color: '#A78BFA', marginBottom: 14 },
   enhancedRow: { marginBottom: 14 },
+  enhancedLabel: { fontSize: 12, color: '#6B6B8D', fontWeight: '500', marginBottom: 4 },
   enhancedValue: { fontSize: 14, color: '#DDD', lineHeight: 20 },
   emotionBadge: { backgroundColor: 'rgba(167,139,250,0.2)', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 12 },
   emotionText: { fontSize: 12, color: '#A78BFA', fontWeight: '600' },

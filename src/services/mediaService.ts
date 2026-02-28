@@ -1,68 +1,6 @@
-import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage, getCurrentUser } from '../config/firebase';
-
-export interface MediaFile {
-  uri: string;
-  type: 'image' | 'audio';
-  name: string;
-}
 
 let recording: Audio.Recording | null = null;
-
-export async function pickImage(): Promise<MediaFile | null> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    throw new Error('Permission to access photos is required');
-  }
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    allowsEditing: true,
-    aspect: [4, 3],
-    quality: 0.8,
-  });
-
-  if (result.canceled || !result.assets[0]) {
-    return null;
-  }
-
-  const asset = result.assets[0];
-  const fileName = `photo_${Date.now()}.jpg`;
-  
-  return {
-    uri: asset.uri,
-    type: 'image',
-    name: fileName,
-  };
-}
-
-export async function takePhoto(): Promise<MediaFile | null> {
-  const permission = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permission.granted) {
-    throw new Error('Permission to access camera is required');
-  }
-
-  const result = await ImagePicker.launchCameraAsync({
-    allowsEditing: true,
-    aspect: [4, 3],
-    quality: 0.8,
-  });
-
-  if (result.canceled || !result.assets[0]) {
-    return null;
-  }
-
-  const asset = result.assets[0];
-  const fileName = `photo_${Date.now()}.jpg`;
-  
-  return {
-    uri: asset.uri,
-    type: 'image',
-    name: fileName,
-  };
-}
 
 export async function startRecording(): Promise<void> {
   try {
@@ -88,7 +26,7 @@ export async function startRecording(): Promise<void> {
   }
 }
 
-export async function stopRecording(): Promise<MediaFile | null> {
+export async function stopRecording(): Promise<string | null> {
   if (!recording) {
     return null;
   }
@@ -106,14 +44,10 @@ export async function stopRecording(): Promise<MediaFile | null> {
       return null;
     }
 
-    const fileName = `voice_${Date.now()}.m4a`;
-    console.log('[Media] Recording stopped:', fileName);
+    console.log('[Media] Recording stopped, converting to text...');
     
-    return {
-      uri,
-      type: 'audio',
-      name: fileName,
-    };
+    const transcribedText = await transcribeAudio(uri);
+    return transcribedText;
   } catch (error) {
     console.log('[Media] Failed to stop recording:', error);
     recording = null;
@@ -125,25 +59,46 @@ export function isRecording(): boolean {
   return recording !== null;
 }
 
-export async function uploadMedia(file: MediaFile): Promise<string> {
-  const user = await getCurrentUser();
-  if (!user) throw new Error('Not authenticated');
+async function transcribeAudio(audioUri: string): Promise<string> {
+  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+  
+  if (!apiKey) {
+    console.log('[Media] No API key, using placeholder');
+    return '[Voice recording - transcription unavailable]';
+  }
 
-  console.log('[Media] Uploading:', file.name);
-  
-  const response = await fetch(file.uri);
-  const blob = await response.blob();
-  
-  const storageRef = ref(storage, `users/${user.uid}/media/${file.name}`);
-  await uploadBytes(storageRef, blob);
-  
-  const downloadURL = await getDownloadURL(storageRef);
-  console.log('[Media] Upload complete:', downloadURL);
-  
-  return downloadURL;
-}
+  try {
+    const response = await fetch(audioUri);
+    const blob = await response.blob();
+    
+    const formData = new FormData();
+    formData.append('file', {
+      uri: audioUri,
+      type: 'audio/m4a',
+      name: 'recording.m4a',
+    } as any);
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'en');
 
-export async function playAudio(uri: string): Promise<void> {
-  const { sound } = await Audio.Sound.createAsync({ uri });
-  await sound.playAsync();
+    const transcribeResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: formData,
+    });
+
+    const data = await transcribeResponse.json();
+    
+    if (data.error) {
+      console.log('[Media] Transcription error:', data.error.message);
+      return '[Voice recording - transcription failed]';
+    }
+
+    console.log('[Media] Transcription complete');
+    return data.text || '[Voice recording - empty]';
+  } catch (error) {
+    console.log('[Media] Transcription error:', error);
+    return '[Voice recording - transcription failed]';
+  }
 }

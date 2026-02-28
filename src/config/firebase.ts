@@ -1,6 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -16,7 +15,6 @@ const API_KEY = firebaseConfig.apiKey;
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
-const storage = getStorage(app);
 
 interface AuthUser {
   uid: string;
@@ -67,5 +65,5 @@ async function getCurrentUser(): Promise<AuthUser | null> {
 
 console.log('[Firebase] Initialized');
 
-export { app, db, storage, signUpWithEmail, signInWithEmail, signOutUser, getCurrentUser };
+export { app, db, signUpWithEmail, signInWithEmail, signOutUser, getCurrentUser };
 export type { AuthUser };
