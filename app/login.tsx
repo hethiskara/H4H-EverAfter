@@ -1,109 +1,133 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Alert, Dimensions } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import AnimatedBackground from '../src/components/AnimatedBackground';
-import GlassInput from '../src/components/GlassInput';
-import GlowButton from '../src/components/GlowButton';
-import { COLORS, GRADIENTS, SPACING, BORDER_RADIUS } from '../src/constants/theme';
-import { useAuth } from '../src/context/AuthContext';
-
-const { height } = Dimensions.get('window');
+import { signInWithEmail, signUpWithEmail } from '../src/config/firebase';
 
 export default function LoginScreen() {
-  console.log('[Login] Mounted');
   const router = useRouter();
-  const { signIn, signUp, signInWithGoogle } = useAuth();
-
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
 
-  const validate = () => {
-    const e: typeof errors = {};
-    if (!email) e.email = 'Email required';
-    else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Invalid email';
-    if (!password) e.password = 'Password required';
-    else if (password.length < 6) e.password = 'Min 6 characters';
-    if (!isLogin && password !== confirmPassword) e.confirmPassword = 'Passwords must match';
-    setErrors(e);
-    return !Object.keys(e).length;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
+  const handleSubmit = useCallback(async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill all fields');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
     setLoading(true);
     try {
-      isLogin ? await signIn(email, password) : await signUp(email, password);
+      if (isLogin) {
+        await signInWithEmail(email, password);
+      } else {
+        await signUpWithEmail(email, password);
+      }
       router.replace('/home');
     } catch (err: any) {
+      console.log('[Login] Error:', err.message);
       Alert.alert('Error', err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [email, password, isLogin]);
 
   return (
-    <View style={styles.container}>
-      <AnimatedBackground />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Animated.View entering={FadeInDown.duration(800).delay(200)} style={styles.header}>
-            <LinearGradient colors={GRADIENTS.primary} style={styles.logoSmall}>
-              <Text style={styles.logoText}>∞</Text>
-            </LinearGradient>
-            <Text style={styles.title}>{isLogin ? 'Welcome Back' : 'Create Account'}</Text>
-            <Text style={styles.subtitle}>{isLogin ? 'Sign in to continue' : 'Start preserving memories'}</Text>
-          </Animated.View>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Image source={require('../assets/logo.png')} style={styles.logo} resizeMode="contain" />
 
-          <View style={styles.form}>
-            <GlassInput label="Email" placeholder="Enter email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" error={errors.email} icon={<Text>✉️</Text>} />
-            <GlassInput label="Password" placeholder="Enter password" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} error={errors.password} icon={<Text>🔒</Text>} rightIcon={<Text>{showPassword ? '🙈' : '👁️'}</Text>} onRightIconPress={() => setShowPassword(!showPassword)} />
-            {!isLogin && <GlassInput label="Confirm Password" placeholder="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showPassword} error={errors.confirmPassword} icon={<Text>🔒</Text>} />}
+        <Text style={styles.title}>{isLogin ? 'Welcome Back' : 'Create Account'}</Text>
+        <Text style={styles.subtitle}>{isLogin ? 'Sign in to continue your journey' : 'Start preserving your memories'}</Text>
 
-            <View style={{ marginTop: SPACING.md }}>
-              <GlowButton title={isLogin ? 'Sign In' : 'Create Account'} onPress={handleSubmit} loading={loading} />
-            </View>
-
-            <View style={styles.divider}>
-              <View style={styles.line} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.line} />
-            </View>
-
-            <GlowButton title="Continue with Google" onPress={signInWithGoogle} variant="outline" icon={<Text style={{ fontSize: 18 }}>G</Text>} />
+        <View style={styles.form}>
+          <View style={styles.inputWrap}>
+            <Text style={styles.inputLabel}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="you@email.com"
+              placeholderTextColor="#52527A"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
           </View>
 
-          <Animated.View entering={FadeInUp.duration(600).delay(600)} style={styles.footer}>
-            <Text style={styles.footerText}>{isLogin ? "Don't have an account? " : 'Have an account? '}</Text>
-            <TouchableOpacity onPress={() => { setIsLogin(!isLogin); setErrors({}); }}>
-              <Text style={styles.footerLink}>{isLogin ? 'Sign Up' : 'Sign In'}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+          <View style={styles.inputWrap}>
+            <Text style={styles.inputLabel}>Password</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Min 6 characters"
+              placeholderTextColor="#52527A"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </View>
+
+          <TouchableOpacity onPress={handleSubmit} disabled={loading} activeOpacity={0.8}>
+            <LinearGradient
+              colors={['#5B4FC4', '#8B5CF6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.button}
+            >
+              <Text style={styles.buttonText}>
+                {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity style={styles.googleButton} activeOpacity={0.8}>
+            <View style={styles.googleIconWrap}>
+              <Text style={styles.googleIcon}>G</Text>
+            </View>
+            <Text style={styles.googleText}>Continue with Google</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.toggle}>
+            <Text style={styles.toggleText}>
+              {isLogin ? "Don't have an account? " : 'Already have an account? '}
+              <Text style={styles.toggleLink}>{isLogin ? 'Sign Up' : 'Sign In'}</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bgDark },
-  scroll: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingTop: height * 0.08, paddingBottom: SPACING.xl },
-  header: { alignItems: 'center', marginBottom: SPACING.xl },
-  logoSmall: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', marginBottom: SPACING.lg },
-  logoText: { fontSize: 36, color: COLORS.textPrimary, fontWeight: '200' },
-  title: { fontSize: 32, fontWeight: '700', color: COLORS.textPrimary, marginBottom: SPACING.xs },
-  subtitle: { fontSize: 16, color: COLORS.textSecondary },
-  form: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: BORDER_RADIUS.xl, padding: SPACING.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACING.lg },
-  line: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
-  dividerText: { color: COLORS.textMuted, marginHorizontal: SPACING.md },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING.xl },
-  footerText: { color: COLORS.textSecondary, fontSize: 15 },
-  footerLink: { color: COLORS.primary, fontSize: 15, fontWeight: '600' },
+  container: { flex: 1, backgroundColor: '#0B0B2B' },
+  scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24, paddingTop: 48 },
+  logo: { width: 160, height: 160, marginBottom: 8 },
+  title: { fontSize: 26, fontWeight: '700', color: '#FFF', marginBottom: 4 },
+  subtitle: { fontSize: 15, color: '#8888AA', marginBottom: 28 },
+  form: { width: '100%', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  inputWrap: { marginBottom: 16 },
+  inputLabel: { color: '#8888AA', fontSize: 13, fontWeight: '500', marginBottom: 6, marginLeft: 4 },
+  input: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 15, color: '#FFF', fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  button: { borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 4 },
+  buttonText: { color: '#FFF', fontSize: 16, fontWeight: '600', letterSpacing: 0.5 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
+  dividerText: { color: '#52527A', marginHorizontal: 16, fontSize: 13 },
+  googleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: 'rgba(91,79,196,0.5)', backgroundColor: 'rgba(91,79,196,0.08)', gap: 10 },
+  googleIconWrap: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
+  googleIcon: { fontSize: 14, fontWeight: '700', color: '#0B0B2B' },
+  googleText: { color: '#A78BFA', fontSize: 15, fontWeight: '600' },
+  toggle: { marginTop: 24, alignItems: 'center' },
+  toggleText: { color: '#8888AA', fontSize: 15 },
+  toggleLink: { color: '#A78BFA', fontWeight: '600' },
 });

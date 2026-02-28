@@ -1,9 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, initializeAuth, getReactNativePersistence, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBr6V-ZxVmkKv2B_pwy-7ACFHoJqQt5C8c",
@@ -14,21 +12,60 @@ const firebaseConfig = {
   appId: "1:756931726833:web:63dd812fdc0dca8ccd8850",
 };
 
+const API_KEY = firebaseConfig.apiKey;
+
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-
-let auth: ReturnType<typeof getAuth>;
-try {
-  auth = Platform.OS === 'web' 
-    ? getAuth(app) 
-    : initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
-} catch {
-  auth = getAuth(app);
-}
-
 const db = getFirestore(app);
 const storage = getStorage(app);
-const googleProvider = new GoogleAuthProvider();
+
+interface AuthUser {
+  uid: string;
+  email: string;
+  idToken: string;
+  refreshToken: string;
+}
+
+async function signUpWithEmail(email: string, password: string): Promise<AuthUser> {
+  console.log('[Auth] Signing up:', email);
+  const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message.replace(/_/g, ' '));
+  const user: AuthUser = { uid: data.localId, email: data.email, idToken: data.idToken, refreshToken: data.refreshToken };
+  await AsyncStorage.setItem('user', JSON.stringify(user));
+  console.log('[Auth] Sign up success');
+  return user;
+}
+
+async function signInWithEmail(email: string, password: string): Promise<AuthUser> {
+  console.log('[Auth] Signing in:', email);
+  const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message.replace(/_/g, ' '));
+  const user: AuthUser = { uid: data.localId, email: data.email, idToken: data.idToken, refreshToken: data.refreshToken };
+  await AsyncStorage.setItem('user', JSON.stringify(user));
+  console.log('[Auth] Sign in success');
+  return user;
+}
+
+async function signOutUser(): Promise<void> {
+  console.log('[Auth] Signing out');
+  await AsyncStorage.removeItem('user');
+}
+
+async function getCurrentUser(): Promise<AuthUser | null> {
+  const stored = await AsyncStorage.getItem('user');
+  return stored ? JSON.parse(stored) : null;
+}
 
 console.log('[Firebase] Initialized');
 
-export { app, auth, db, storage, googleProvider };
+export { app, db, storage, signUpWithEmail, signInWithEmail, signOutUser, getCurrentUser };
+export type { AuthUser };
