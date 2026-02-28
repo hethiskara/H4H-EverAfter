@@ -8,6 +8,33 @@ interface EnhancedMemory {
   summary: string;
 }
 
+export function inferEmotionFromText(text: string): string {
+  const t = text.toLowerCase();
+  if (/\b(proud|accomplish|achieved|won)\b/.test(t)) return 'Pride';
+  if (/\b(happy|joy|glad|wonderful|beautiful|amazing)\b/.test(t)) return 'Joy';
+  if (/\b(love|lovely|beloved|heart)\b/.test(t)) return 'Love';
+  if (/\b(grateful|thankful|blessed)\b/.test(t)) return 'Gratitude';
+  if (/\b(excited|thrilled|can't wait)\b/.test(t)) return 'Excitement';
+  if (/\b(calm|peaceful|serene|relaxed)\b/.test(t)) return 'Peace';
+  if (/\b(miss|nostalgic|remember|back then)\b/.test(t)) return 'Nostalgia';
+  if (/\b(hope|hopeful|looking forward)\b/.test(t)) return 'Hope';
+  if (/\b(content|satisfied|okay|fine)\b/.test(t)) return 'Contentment';
+  if (/\b(sad|sorrow|miss you)\b/.test(t)) return 'Sadness';
+  if (/\b(worried|anxious|nervous)\b/.test(t)) return 'Anxiety';
+  if (/\b(longing|wish|craving)\b/.test(t)) return 'Longing';
+  if (/\b(confident|independent|single)\b/.test(t)) return 'Confidence';
+  return 'Reflective';
+}
+
+export function inferLifeStageFromText(text: string): string {
+  const t = text.toLowerCase();
+  if (/\b(kid|child|elementary|grade school)\b/.test(t)) return 'Childhood';
+  if (/\b(teen|high school|college|university|student)\b/.test(t)) return 'Teenage Years';
+  if (/\b(single|first job|graduated|moving out|dating)\b/.test(t)) return 'Young Adult';
+  if (/\b(retired|grandchild|grandparent|senior)\b/.test(t)) return 'Senior';
+  return 'Adult';
+}
+
 const getApiKey = () => {
   return process.env.EXPO_PUBLIC_OPENAI_API_KEY || '';
 };
@@ -22,22 +49,24 @@ export async function enhanceMemoryWithAI(rawText: string): Promise<EnhancedMemo
   
   console.log('[AI] Enhancing memory...');
   
-  const systemPrompt = `You are a memory analyst for a personal memory preservation app called EverAfter. Your job is to analyze personal memories and extract meaningful insights. Be warm, empathetic, and insightful. Always return valid JSON only.`;
+  const systemPrompt = `You are a memory analyst for EverAfter, a personal memory preservation app. Extract structured insights from memories. CRITICAL: You MUST always provide "emotion" and "lifeStage" - infer from context even when not explicit. Never leave them empty. Return valid JSON only.`;
   
-  const userPrompt = `Analyze this personal memory and provide structured insights:
+  const userPrompt = `Analyze this personal memory and extract structured insights:
 
 "${rawText}"
 
-Instructions:
-1. enhancedText: Rewrite the memory in a more vivid, emotionally rich way (2-3 sentences). Add sensory details and emotional depth while staying true to the original.
-2. emotion: Identify the PRIMARY emotion (choose one: Joy, Love, Gratitude, Pride, Excitement, Peace, Nostalgia, Hope, Contentment, Sadness, Anxiety, Longing)
-3. people: List all people mentioned or clearly implied (use names if given, or relationships like "Mom", "Friend")
-4. location: Extract location if mentioned, otherwise "Not specified"
-5. lifeStage: Determine life stage (Childhood, Teenage Years, Young Adult, Adult, Senior)
-6. themes: Identify 2-4 life themes (Family, Friendship, Achievement, Growth, Adventure, Romance, Career, Health, Spirituality, Learning, Creativity, Nature)
-7. summary: One powerful sentence capturing the essence of this memory
+REQUIRED - never skip:
+• emotion: The PRIMARY emotion felt. Choose one: Joy, Love, Gratitude, Pride, Excitement, Peace, Nostalgia, Hope, Contentment, Sadness, Anxiety, Longing, Confidence, Independence. Infer from words like "proud", "happy", "miss", "excited", "calm", "grateful".
+• lifeStage: Infer from context. Choose: Childhood, Teenage Years, Young Adult, Adult, Senior. Hints: "single", "college", "first job" → Young Adult; "kids", "career" → Adult; "retired", "grandchildren" → Senior.
 
-Return ONLY this JSON structure:
+Also extract:
+• enhancedText: Rewrite vividly (2-3 sentences). Add emotional depth.
+• people: Names or relationships mentioned (e.g. "Mom", "Friend")
+• location: Place if mentioned, else "Not specified"
+• themes: 2-4 themes: Family, Friendship, Achievement, Growth, Adventure, Romance, Career, Health, Spirituality, Learning, Creativity, Nature, Independence
+• summary: One sentence capturing the essence
+
+Return ONLY this JSON (no markdown, no extra text):
 {
   "enhancedText": "...",
   "emotion": "...",
@@ -61,7 +90,7 @@ Return ONLY this JSON structure:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.7,
+        temperature: 0.4,
         max_tokens: 600,
       }),
     });
@@ -85,16 +114,18 @@ Return ONLY this JSON structure:
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
-    console.log('[AI] Enhancement complete:', parsed.emotion);
+    const emotion = parsed.emotion?.trim() || inferEmotionFromText(rawText);
+    const lifeStage = parsed.lifeStage?.trim() || inferLifeStageFromText(rawText);
+    console.log('[AI] Enhancement complete:', { emotion, lifeStage });
     
     return {
-      enhancedText: parsed.enhancedText || rawText,
-      emotion: parsed.emotion || 'Reflective',
+      enhancedText: parsed.enhancedText?.trim() || rawText,
+      emotion,
       people: Array.isArray(parsed.people) ? parsed.people : [],
-      location: parsed.location || 'Not specified',
-      lifeStage: parsed.lifeStage || 'Adult',
+      location: parsed.location?.trim() || 'Not specified',
+      lifeStage,
       themes: Array.isArray(parsed.themes) ? parsed.themes : ['Personal'],
-      summary: parsed.summary || rawText.slice(0, 100),
+      summary: parsed.summary?.trim() || rawText.slice(0, 100),
     };
   } catch (error: any) {
     console.log('[AI] Error:', error.message);

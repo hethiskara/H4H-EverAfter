@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, Alert, ActivityIndicator, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { saveMemory } from '../services/memoryService';
-import { enhanceMemoryWithAI } from '../services/aiService';
+import { enhanceMemoryWithAI, inferEmotionFromText, inferLifeStageFromText } from '../services/aiService';
 import { pickImage, takePhoto, startRecording, stopRecording, uploadMedia, playAudio, MediaFile, UploadedMedia } from '../services/mediaService';
 import { Memory, MediaItem } from '../types/memory';
 import { Audio } from 'expo-av';
@@ -194,18 +194,21 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
       try {
         enhancedData = await enhanceMemoryWithAI(fullText);
       } catch (err) {
-        console.log('[Memory] AI enhancement failed, saving without enhancement');
+        console.log('[Memory] AI enhancement failed, using fallback extraction');
       }
+      
+      const emotion = enhancedData?.emotion || inferEmotionFromText(fullText);
+      const lifeStage = enhancedData?.lifeStage || inferLifeStageFromText(fullText);
       
       setSavingStatus('Saving...');
       await saveMemory({
         date,
         rawText: fullText,
         enhancedText: enhancedData?.enhancedText || null,
-        emotion: enhancedData?.emotion || null,
+        emotion: emotion || null,
         people: enhancedData?.people || [],
         location: enhancedData?.location || null,
-        lifeStage: enhancedData?.lifeStage || null,
+        lifeStage: lifeStage || null,
         themes: enhancedData?.themes || [],
         summary: enhancedData?.summary || null,
         mediaURLs,
