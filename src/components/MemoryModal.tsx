@@ -3,8 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView,
 import { LinearGradient } from 'expo-linear-gradient';
 import { saveMemory } from '../services/memoryService';
 import { enhanceMemoryWithAI } from '../services/aiService';
-import { pickImage, takePhoto, startRecording, stopRecording, uploadMedia, playAudio, MediaFile } from '../services/mediaService';
-import { Memory } from '../types/memory';
+import { pickImage, takePhoto, startRecording, stopRecording, uploadMedia, playAudio, MediaFile, UploadedMedia } from '../services/mediaService';
+import { Memory, MediaItem } from '../types/memory';
 import { Audio } from 'expo-av';
 
 interface MemoryModalProps {
@@ -179,17 +179,31 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
     
     try {
       const mediaURLs: string[] = [];
+      const media: MediaItem[] = [];
+      const voiceTranscripts: string[] = [];
       
       for (const file of mediaFiles) {
-        const url = await uploadMedia(file);
-        mediaURLs.push(url);
+        const uploaded: UploadedMedia = await uploadMedia(file);
+        mediaURLs.push(uploaded.url);
+        media.push({
+          url: uploaded.url,
+          type: uploaded.type,
+          transcript: uploaded.transcript,
+        });
+        if (uploaded.type === 'audio' && uploaded.transcript) {
+          voiceTranscripts.push(uploaded.transcript);
+        }
       }
       
       setUploading(false);
       
+      const fullText = voiceTranscripts.length > 0 
+        ? (text ? `${text}\n\n🎤 Voice: ${voiceTranscripts.join('\n\n🎤 Voice: ')}` : `🎤 Voice: ${voiceTranscripts.join('\n\n🎤 Voice: ')}`)
+        : (text || '(Media memory)');
+      
       await saveMemory({
         date,
-        rawText: text || '(Media memory)',
+        rawText: fullText,
         enhancedText: enhancedData?.enhancedText,
         emotion: enhancedData?.emotion,
         people: enhancedData?.people,
@@ -198,6 +212,8 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
         themes: enhancedData?.themes,
         summary: enhancedData?.summary,
         mediaURLs,
+        media,
+        voiceTranscripts,
       });
       
       setText('');

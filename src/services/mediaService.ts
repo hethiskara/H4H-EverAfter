@@ -7,6 +7,13 @@ export interface MediaFile {
   uri: string;
   type: 'image' | 'audio';
   name: string;
+  transcript?: string;
+}
+
+export interface UploadedMedia {
+  url: string;
+  type: 'image' | 'audio';
+  transcript?: string;
 }
 
 let recording: Audio.Recording | null = null;
@@ -125,7 +132,50 @@ export function isRecording(): boolean {
   return recording !== null;
 }
 
-export async function uploadMedia(file: MediaFile): Promise<string> {
+async function transcribeAudio(audioUri: string): Promise<string> {
+  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+  
+  if (!apiKey) {
+    console.log('[Media] No API key for transcription');
+    return '';
+  }
+
+  try {
+    console.log('[Media] Transcribing audio...');
+    
+    const formData = new FormData();
+    formData.append('file', {
+      uri: audioUri,
+      type: 'audio/m4a',
+      name: 'recording.m4a',
+    } as any);
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'en');
+
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    
+    if (data.error) {
+      console.log('[Media] Transcription error:', data.error.message);
+      return '';
+    }
+
+    console.log('[Media] Transcription complete');
+    return data.text || '';
+  } catch (error) {
+    console.log('[Media] Transcription failed:', error);
+    return '';
+  }
+}
+
+export async function uploadMedia(file: MediaFile): Promise<UploadedMedia> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
@@ -140,7 +190,16 @@ export async function uploadMedia(file: MediaFile): Promise<string> {
   const downloadURL = await getDownloadURL(storageRef);
   console.log('[Media] Upload complete');
   
-  return downloadURL;
+  let transcript: string | undefined;
+  if (file.type === 'audio') {
+    transcript = await transcribeAudio(file.uri);
+  }
+  
+  return {
+    url: downloadURL,
+    type: file.type,
+    transcript,
+  };
 }
 
 export async function playAudio(uri: string): Promise<Audio.Sound> {

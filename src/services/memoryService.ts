@@ -31,6 +31,8 @@ export async function saveMemory(memory: Omit<Memory, 'id' | 'createdAt' | 'upda
     themes: memory.themes || [],
     summary: memory.summary || null,
     mediaURLs: memory.mediaURLs || [],
+    media: memory.media || [],
+    voiceTranscripts: memory.voiceTranscripts || [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

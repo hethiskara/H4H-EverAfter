@@ -1,3 +1,9 @@
+export interface MediaItem {
+  url: string;
+  type: 'image' | 'audio';
+  transcript?: string;
+}
+
 export interface Memory {
   id: string;
   date: string;
@@ -10,6 +16,8 @@ export interface Memory {
   themes?: string[];
   summary?: string | null;
   mediaURLs?: string[];
+  media?: MediaItem[];
+  voiceTranscripts?: string[];
   createdAt: number;
   updatedAt: number;
 }
