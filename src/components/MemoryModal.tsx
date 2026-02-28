@@ -18,8 +18,6 @@ interface MemoryModalProps {
 export default function MemoryModal({ visible, date, existingMemories, onClose, onSaved }: MemoryModalProps) {
   const [mode, setMode] = useState<'list' | 'new'>('list');
   const [text, setText] = useState('');
-  const [enhancedData, setEnhancedData] = useState<Partial<Memory> | null>(null);
-  const [enhancing, setEnhancing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [recording, setRecording] = useState(false);
@@ -27,15 +25,16 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
   const [uploading, setUploading] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [currentSound, setCurrentSound] = useState<Audio.Sound | null>(null);
+  const [savingStatus, setSavingStatus] = useState('');
 
   useEffect(() => {
     if (visible) {
       setMode(existingMemories.length > 0 ? 'list' : 'new');
       setText('');
-      setEnhancedData(null);
       setMediaFiles([]);
       setRecording(false);
       setRecordingTime(0);
+      setSavingStatus('');
     }
   }, [visible, existingMemories.length]);
 
@@ -153,76 +152,68 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
     }
   };
 
-  const handleEnhance = async () => {
-    if (!text.trim()) {
-      Alert.alert('Empty Memory', 'Please write something first');
-      return;
-    }
-    setEnhancing(true);
-    try {
-      const enhanced = await enhanceMemoryWithAI(text);
-      setEnhancedData(enhanced);
-    } catch (err: any) {
-      Alert.alert('AI Enhancement Failed', err.message || 'Could not enhance memory. You can still save it.');
-    } finally {
-      setEnhancing(false);
-    }
-  };
-
   const handleSave = async () => {
     if (!text.trim() && mediaFiles.length === 0) {
       Alert.alert('Empty Memory', 'Please write something or add media');
       return;
     }
     setSaving(true);
-    setUploading(mediaFiles.length > 0);
     
     try {
       const mediaURLs: string[] = [];
       const media: MediaItem[] = [];
       const voiceTranscripts: string[] = [];
       
-      for (const file of mediaFiles) {
-        const uploaded: UploadedMedia = await uploadMedia(file);
-        mediaURLs.push(uploaded.url);
-        
-        const mediaItem: MediaItem = {
-          url: uploaded.url,
-          type: uploaded.type,
-        };
-        if (uploaded.transcript) {
-          mediaItem.transcript = uploaded.transcript;
-        }
-        media.push(mediaItem);
-        
-        if (uploaded.type === 'audio' && uploaded.transcript) {
-          voiceTranscripts.push(uploaded.transcript);
+      if (mediaFiles.length > 0) {
+        setSavingStatus('Uploading media...');
+        for (const file of mediaFiles) {
+          const uploaded: UploadedMedia = await uploadMedia(file);
+          mediaURLs.push(uploaded.url);
+          
+          const mediaItem: MediaItem = {
+            url: uploaded.url,
+            type: uploaded.type,
+          };
+          if (uploaded.transcript) {
+            mediaItem.transcript = uploaded.transcript;
+          }
+          media.push(mediaItem);
+          
+          if (uploaded.type === 'audio' && uploaded.transcript) {
+            voiceTranscripts.push(uploaded.transcript);
+          }
         }
       }
-      
-      setUploading(false);
       
       const fullText = voiceTranscripts.length > 0 
         ? (text ? `${text}\n\n🎤 Voice: ${voiceTranscripts.join('\n\n🎤 Voice: ')}` : `🎤 Voice: ${voiceTranscripts.join('\n\n🎤 Voice: ')}`)
         : (text || '(Media memory)');
       
+      setSavingStatus('Analyzing memory...');
+      let enhancedData: any = {};
+      try {
+        enhancedData = await enhanceMemoryWithAI(fullText);
+      } catch (err) {
+        console.log('[Memory] AI enhancement failed, saving without enhancement');
+      }
+      
+      setSavingStatus('Saving...');
       await saveMemory({
         date,
         rawText: fullText,
-        enhancedText: enhancedData?.enhancedText,
-        emotion: enhancedData?.emotion,
-        people: enhancedData?.people,
-        location: enhancedData?.location,
-        lifeStage: enhancedData?.lifeStage,
-        themes: enhancedData?.themes,
-        summary: enhancedData?.summary,
+        enhancedText: enhancedData?.enhancedText || null,
+        emotion: enhancedData?.emotion || null,
+        people: enhancedData?.people || [],
+        location: enhancedData?.location || null,
+        lifeStage: enhancedData?.lifeStage || null,
+        themes: enhancedData?.themes || [],
+        summary: enhancedData?.summary || null,
         mediaURLs,
         media,
         voiceTranscripts,
       });
       
       setText('');
-      setEnhancedData(null);
       setMediaFiles([]);
       onSaved();
       onClose();
@@ -230,7 +221,7 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
       Alert.alert('Error', err.message);
     } finally {
       setSaving(false);
-      setUploading(false);
+      setSavingStatus('');
     }
   };
 
@@ -243,7 +234,6 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
       currentSound.unloadAsync();
     }
     setText('');
-    setEnhancedData(null);
     setMediaFiles([]);
     setMode('list');
     onClose();
@@ -414,71 +404,7 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
         </View>
       )}
 
-      {enhancedData && (
-        <View style={styles.enhancedSection}>
-          <Text style={styles.enhancedTitle}>✨ AI Enhanced</Text>
-          
-          <View style={styles.enhancedRow}>
-            <Text style={styles.enhancedLabel}>Emotion</Text>
-            <View style={styles.emotionBadgeLarge}>
-              <Text style={styles.emotionTextLarge}>{enhancedData.emotion}</Text>
-            </View>
-          </View>
-
-          {enhancedData.enhancedText && (
-            <View style={styles.enhancedRow}>
-              <Text style={styles.enhancedLabel}>Enhanced Version</Text>
-              <Text style={styles.enhancedValue}>{enhancedData.enhancedText}</Text>
-            </View>
-          )}
-
-          {enhancedData.people && enhancedData.people.length > 0 && (
-            <View style={styles.enhancedRow}>
-              <Text style={styles.enhancedLabel}>People</Text>
-              <Text style={styles.enhancedValue}>{enhancedData.people.join(', ')}</Text>
-            </View>
-          )}
-
-          {enhancedData.themes && enhancedData.themes.length > 0 && (
-            <View style={styles.enhancedRow}>
-              <Text style={styles.enhancedLabel}>Themes</Text>
-              <View style={styles.themesWrap}>
-                {enhancedData.themes.map((theme, i) => (
-                  <View key={i} style={styles.themeBadgeLarge}>
-                    <Text style={styles.themeTextLarge}>{theme}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {enhancedData.summary && (
-            <View style={styles.enhancedRow}>
-              <Text style={styles.enhancedLabel}>Summary</Text>
-              <Text style={styles.summaryText}>{enhancedData.summary}</Text>
-            </View>
-          )}
-        </View>
-      )}
-
       <View style={styles.actions}>
-        <TouchableOpacity 
-          style={[styles.enhanceBtn, (enhancing || !text.trim()) && styles.enhanceBtnDisabledStyle]} 
-          onPress={handleEnhance}
-          disabled={enhancing || !text.trim()}
-          activeOpacity={0.7}
-        >
-          {enhancing ? (
-            <ActivityIndicator color="#A78BFA" size="small" />
-          ) : (
-            <>
-              <Text style={styles.enhanceBtnIcon}>✨</Text>
-              <Text style={styles.enhanceBtnText}>Enhance with AI</Text>
-              <Text style={styles.optionalText}>(Optional)</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
         <TouchableOpacity 
           onPress={handleSave} 
           disabled={saving || (!text.trim() && mediaFiles.length === 0)}
@@ -493,9 +419,7 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
             {saving ? (
               <View style={styles.savingRow}>
                 <ActivityIndicator color="#FFF" size="small" />
-                <Text style={styles.saveBtnText}>
-                  {uploading ? ' Uploading...' : ' Saving...'}
-                </Text>
+                <Text style={styles.saveBtnText}> {savingStatus || 'Saving...'}</Text>
               </View>
             ) : (
               <Text style={[styles.saveBtnText, (!text.trim() && mediaFiles.length === 0) && styles.saveBtnTextDisabled]}>
