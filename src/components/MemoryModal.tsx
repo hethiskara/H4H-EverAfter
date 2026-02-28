@@ -185,11 +185,16 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
       for (const file of mediaFiles) {
         const uploaded: UploadedMedia = await uploadMedia(file);
         mediaURLs.push(uploaded.url);
-        media.push({
+        
+        const mediaItem: MediaItem = {
           url: uploaded.url,
           type: uploaded.type,
-          transcript: uploaded.transcript,
-        });
+        };
+        if (uploaded.transcript) {
+          mediaItem.transcript = uploaded.transcript;
+        }
+        media.push(mediaItem);
+        
         if (uploaded.type === 'audio' && uploaded.transcript) {
           voiceTranscripts.push(uploaded.transcript);
         }

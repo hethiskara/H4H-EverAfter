@@ -5,8 +5,21 @@ import { Memory } from '../types/memory';
 function removeUndefined(obj: Record<string, any>): Record<string, any> {
   const cleaned: Record<string, any> = {};
   for (const key in obj) {
-    if (obj[key] !== undefined) {
-      cleaned[key] = obj[key];
+    const value = obj[key];
+    if (value === undefined) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      cleaned[key] = value.map(item => {
+        if (item && typeof item === 'object') {
+          return removeUndefined(item);
+        }
+        return item;
+      });
+    } else if (value && typeof value === 'object') {
+      cleaned[key] = removeUndefined(value);
+    } else {
+      cleaned[key] = value;
     }
   }
   return cleaned;
