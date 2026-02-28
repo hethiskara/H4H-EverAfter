@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, RefreshControl } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signOutUser, getCurrentUser } from '../src/config/firebase';
@@ -15,7 +15,6 @@ export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
-  const [memoriesDates, setMemoriesDates] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -28,12 +27,20 @@ export default function HomeScreen() {
     const month = currentDate.getMonth();
     const loaded = await getMemoriesForMonth(year, month);
     setMemories(loaded);
-    setMemoriesDates(new Set(loaded.map(m => m.date)));
   }, [currentDate]);
 
   useEffect(() => {
     loadMemories();
   }, [loadMemories]);
+
+  const memoriesDates = useMemo(() => {
+    return new Set(memories.map(m => m.date));
+  }, [memories]);
+
+  const selectedDateMemories = useMemo(() => {
+    if (!selectedDate) return [];
+    return memories.filter(m => m.date === selectedDate).sort((a, b) => b.createdAt - a.createdAt);
+  }, [memories, selectedDate]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -59,11 +66,17 @@ export default function HomeScreen() {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
-  const todayMemories = memories.filter(m => {
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    return m.date === todayStr;
-  });
+  const handleModalClose = () => {
+    setModalVisible(false);
+  };
+
+  const handleMemorySaved = async () => {
+    await loadMemories();
+  };
+
+  const recentMemories = useMemo(() => {
+    return [...memories].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+  }, [memories]);
 
   return (
     <View style={styles.container}>
@@ -91,17 +104,27 @@ export default function HomeScreen() {
           onNextMonth={handleNextMonth}
         />
 
-        {todayMemories.length > 0 && (
-          <View style={styles.todaySection}>
-            <Text style={styles.sectionTitle}>Today's Memories</Text>
-            {todayMemories.map((memory, index) => (
-              <View key={index} style={styles.memoryCard}>
-                {memory.emotion && (
-                  <View style={styles.emotionBadge}>
-                    <Text style={styles.emotionText}>{memory.emotion}</Text>
-                  </View>
-                )}
-                <Text style={styles.memoryText} numberOfLines={3}>{memory.rawText}</Text>
+        {recentMemories.length > 0 && (
+          <View style={styles.recentSection}>
+            <Text style={styles.sectionTitle}>Recent Memories</Text>
+            {recentMemories.map((memory, index) => (
+              <TouchableOpacity 
+                key={memory.id || index} 
+                style={styles.memoryCard}
+                onPress={() => handleSelectDate(memory.date)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.memoryCardHeader}>
+                  {memory.emotion && (
+                    <View style={styles.emotionBadge}>
+                      <Text style={styles.emotionText}>{memory.emotion}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.memoryDate}>
+                    {new Date(memory.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </Text>
+                </View>
+                <Text style={styles.memoryText} numberOfLines={2}>{memory.rawText}</Text>
                 {memory.themes && memory.themes.length > 0 && (
                   <View style={styles.themesRow}>
                     {memory.themes.slice(0, 3).map((theme, i) => (
@@ -111,7 +134,7 @@ export default function HomeScreen() {
                     ))}
                   </View>
                 )}
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -157,8 +180,9 @@ export default function HomeScreen() {
       <MemoryModal
         visible={modalVisible}
         date={selectedDate || new Date().toISOString().split('T')[0]}
-        onClose={() => setModalVisible(false)}
-        onSaved={loadMemories}
+        existingMemories={selectedDateMemories}
+        onClose={handleModalClose}
+        onSaved={handleMemorySaved}
       />
     </View>
   );
@@ -171,10 +195,12 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '700', color: '#FFF' },
   signOut: { padding: 10, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   signOutText: { color: '#8888AA', fontSize: 13 },
-  todaySection: { marginTop: 24 },
+  recentSection: { marginTop: 24 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#FFF', marginBottom: 12 },
   memoryCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  emotionBadge: { backgroundColor: 'rgba(167,139,250,0.2)', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 10 },
+  memoryCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  memoryDate: { fontSize: 12, color: '#6B6B8D' },
+  emotionBadge: { backgroundColor: 'rgba(167,139,250,0.2)', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 12 },
   emotionText: { fontSize: 12, color: '#A78BFA', fontWeight: '600' },
   memoryText: { fontSize: 14, color: '#CCC', lineHeight: 20 },
   themesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
