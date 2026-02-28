@@ -83,19 +83,6 @@ export default function LoginScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity style={styles.googleButton} activeOpacity={0.8}>
-            <View style={styles.googleIconWrap}>
-              <Text style={styles.googleIcon}>G</Text>
-            </View>
-            <Text style={styles.googleText}>Continue with Google</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.toggle}>
             <Text style={styles.toggleText}>
               {isLogin ? "Don't have an account? " : 'Already have an account? '}
@@ -120,13 +107,6 @@ const styles = StyleSheet.create({
   input: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 15, color: '#FFF', fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   button: { borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 4 },
   buttonText: { color: '#FFF', fontSize: 16, fontWeight: '600', letterSpacing: 0.5 },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
-  dividerText: { color: '#52527A', marginHorizontal: 16, fontSize: 13 },
-  googleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: 'rgba(91,79,196,0.5)', backgroundColor: 'rgba(91,79,196,0.08)', gap: 10 },
-  googleIconWrap: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
-  googleIcon: { fontSize: 14, fontWeight: '700', color: '#0B0B2B' },
-  googleText: { color: '#A78BFA', fontSize: 15, fontWeight: '600' },
   toggle: { marginTop: 24, alignItems: 'center' },
   toggleText: { color: '#8888AA', fontSize: 15 },
   toggleLink: { color: '#A78BFA', fontWeight: '600' },
