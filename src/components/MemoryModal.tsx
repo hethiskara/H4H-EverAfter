@@ -187,20 +187,23 @@ export default function MemoryModal({ visible, date, existingMemories, onClose, 
       </View>
 
       <View style={styles.mediaSection}>
-        <Text style={styles.label}>Add Media</Text>
+        <View style={styles.mediaLabelRow}>
+          <Text style={styles.label}>Add Media</Text>
+          <Text style={styles.comingSoon}>Coming Soon</Text>
+        </View>
         <View style={styles.mediaButtons}>
-          <TouchableOpacity style={styles.mediaBtn}>
+          <View style={styles.mediaBtnDisabled}>
             <Text style={styles.mediaIcon}>🎤</Text>
             <Text style={styles.mediaBtnText}>Voice</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.mediaBtn}>
+          </View>
+          <View style={styles.mediaBtnDisabled}>
             <Text style={styles.mediaIcon}>📷</Text>
             <Text style={styles.mediaBtnText}>Photo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.mediaBtn}>
+          </View>
+          <View style={styles.mediaBtnDisabled}>
             <Text style={styles.mediaIcon}>🎬</Text>
             <Text style={styles.mediaBtnText}>Video</Text>
-          </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -347,10 +350,12 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, color: '#8888AA', fontWeight: '500', marginBottom: 10 },
   textInput: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, color: '#FFF', fontSize: 16, minHeight: 120, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   mediaSection: { marginBottom: 20 },
+  mediaLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  comingSoon: { fontSize: 11, color: '#6B6B8D', fontStyle: 'italic' },
   mediaButtons: { flexDirection: 'row', gap: 12 },
-  mediaBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  mediaBtnDisabled: { flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', opacity: 0.5 },
   mediaIcon: { fontSize: 22, marginBottom: 4 },
-  mediaBtnText: { fontSize: 11, color: '#8888AA', fontWeight: '500' },
+  mediaBtnText: { fontSize: 11, color: '#6B6B8D', fontWeight: '500' },
   
   enhancedSection: { backgroundColor: 'rgba(91,79,196,0.1)', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(91,79,196,0.2)' },
   enhancedTitle: { fontSize: 16, fontWeight: '600', color: '#A78BFA', marginBottom: 14 },

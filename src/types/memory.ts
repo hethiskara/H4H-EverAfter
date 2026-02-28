@@ -1,14 +1,14 @@
 export interface Memory {
-  id?: string;
+  id: string;
   date: string;
   rawText: string;
-  enhancedText?: string;
-  emotion?: string;
+  enhancedText?: string | null;
+  emotion?: string | null;
   people?: string[];
-  location?: string;
-  lifeStage?: string;
+  location?: string | null;
+  lifeStage?: string | null;
   themes?: string[];
-  summary?: string;
+  summary?: string | null;
   mediaURLs?: string[];
   createdAt: number;
   updatedAt: number;

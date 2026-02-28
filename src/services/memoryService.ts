@@ -2,6 +2,16 @@ import { collection, doc, setDoc, getDocs, query, where, orderBy } from 'firebas
 import { db, getCurrentUser } from '../config/firebase';
 import { Memory } from '../types/memory';
 
+function removeUndefined(obj: Record<string, any>): Record<string, any> {
+  const cleaned: Record<string, any> = {};
+  for (const key in obj) {
+    if (obj[key] !== undefined) {
+      cleaned[key] = obj[key];
+    }
+  }
+  return cleaned;
+}
+
 export async function saveMemory(memory: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
@@ -10,13 +20,24 @@ export async function saveMemory(memory: Omit<Memory, 'id' | 'createdAt' | 'upda
   const memoryRef = doc(db, 'users', user.uid, 'memories', memoryId);
   
   const fullMemory: Memory = {
-    ...memory,
     id: memoryId,
+    date: memory.date,
+    rawText: memory.rawText,
+    enhancedText: memory.enhancedText || null,
+    emotion: memory.emotion || null,
+    people: memory.people || [],
+    location: memory.location || null,
+    lifeStage: memory.lifeStage || null,
+    themes: memory.themes || [],
+    summary: memory.summary || null,
+    mediaURLs: memory.mediaURLs || [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
 
-  await setDoc(memoryRef, fullMemory);
+  const cleanedMemory = removeUndefined(fullMemory);
+  
+  await setDoc(memoryRef, cleanedMemory);
   console.log('[Memory] Saved:', memoryId);
   return memoryId;
 }
