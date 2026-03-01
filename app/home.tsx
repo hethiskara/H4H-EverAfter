@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Animated, Dimensions, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,12 +27,30 @@ export default function HomeScreen() {
   const fabScale = useRef(new Animated.Value(1)).current;
   const fabRotate = useRef(new Animated.Value(0)).current;
   const menuAnim = useRef(new Animated.Value(0)).current;
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef<FlatList>(null);
   
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.05, duration: 1500, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
       ])
     ).start();
   }, []);
@@ -225,36 +243,123 @@ export default function HomeScreen() {
 
         {recentMemories.length > 0 && (
           <View style={styles.recentSection}>
-            <Text style={styles.sectionTitle}>Recent Memories</Text>
-            {recentMemories.map((memory, index) => (
-              <TouchableOpacity 
-                key={memory.id || index} 
-                style={styles.memoryCard}
-                onPress={() => handleSelectDate(memory.date)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.memoryCardHeader}>
-                  {memory.emotion && (
-                    <View style={styles.emotionBadge}>
-                      <Text style={styles.emotionText}>{memory.emotion}</Text>
-                    </View>
-                  )}
-                  <Text style={styles.memoryDate}>
-                    {new Date(memory.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </Text>
-                </View>
-                <Text style={styles.memoryText} numberOfLines={2}>{memory.rawText}</Text>
-                {memory.themes && memory.themes.length > 0 && (
-                  <View style={styles.themesRow}>
-                    {memory.themes.slice(0, 3).map((theme, i) => (
-                      <View key={i} style={styles.themeBadge}>
-                        <Text style={styles.themeText}>{theme}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Memories</Text>
+              <Text style={styles.sectionSubtitle}>Swipe to explore →</Text>
+            </View>
+            <Animated.FlatList
+              ref={flatListRef}
+              data={recentMemories}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={CARD_WIDTH + 16}
+              decelerationRate="fast"
+              contentContainerStyle={styles.memoriesScrollContainer}
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                { useNativeDriver: false }
+              )}
+              renderItem={({ item: memory, index }) => {
+                const inputRange = [
+                  (index - 1) * (CARD_WIDTH + 16),
+                  index * (CARD_WIDTH + 16),
+                  (index + 1) * (CARD_WIDTH + 16),
+                ];
+
+                const scale = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.9, 1, 0.9],
+                  extrapolate: 'clamp',
+                });
+
+                const opacity = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.6, 1, 0.6],
+                  extrapolate: 'clamp',
+                });
+
+                const glowColor = glowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['rgba(167,139,250,0.3)', 'rgba(236,72,153,0.5)'],
+                });
+
+                const emotionGradients: { [key: string]: [string, string, string] } = {
+                  happy: ['#FFD700', '#FFA500', '#FF8C00'],
+                  sad: ['#4A90E2', '#357ABD', '#2E5C8A'],
+                  excited: ['#FF6B9D', '#C44569', '#A73E5C'],
+                  calm: ['#50C878', '#3CB371', '#2E8B57'],
+                  nostalgic: ['#9B59B6', '#8E44AD', '#7D3C98'],
+                  grateful: ['#F39C12', '#E67E22', '#D35400'],
+                  default: ['#A78BFA', '#8B5CF6', '#7C3AED'],
+                };
+
+                const gradient: [string, string, string] = emotionGradients[memory.emotion?.toLowerCase() || 'default'] || emotionGradients.default;
+
+                return (
+                  <Animated.View
+                    style={[
+                      styles.memoryCardContainer,
+                      {
+                        transform: [{ scale }],
+                        opacity,
+                      },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      onPress={() => handleSelectDate(memory.date)}
+                      activeOpacity={0.9}
+                    >
+                      <Animated.View
+                        style={[
+                          styles.memoryCardWrapper,
+                          {
+                            borderColor: glowColor,
+                            shadowColor: glowColor,
+                          },
+                        ]}
+                      >
+                        <LinearGradient
+                          colors={gradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.memoryCardGradient}
+                        >
+                          <View style={styles.memoryCardOverlay}>
+                            <View style={styles.memoryCardTop}>
+                              {memory.emotion && (
+                                <View style={styles.emotionBadgeNew}>
+                                  <Text style={styles.emotionTextNew}>{memory.emotion}</Text>
+                                </View>
+                              )}
+                              <Text style={styles.memoryDateNew}>
+                                {new Date(memory.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </Text>
+                            </View>
+
+                            <View style={styles.memoryCardContent}>
+                              <Text style={styles.memoryTextNew} numberOfLines={4}>
+                                {memory.rawText}
+                              </Text>
+                            </View>
+
+                            {memory.themes && memory.themes.length > 0 && (
+                              <View style={styles.themesRowNew}>
+                                {memory.themes.slice(0, 2).map((theme: string, i: number) => (
+                                  <View key={i} style={styles.themeBadgeNew}>
+                                    <Text style={styles.themeTextNew}>#{theme}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                        </LinearGradient>
+                      </Animated.View>
+                    </TouchableOpacity>
+                  </Animated.View>
+                );
+              }}
+              keyExtractor={(item, index) => item.id || index.toString()}
+            />
           </View>
         )}
 
@@ -425,6 +530,9 @@ export default function HomeScreen() {
   );
 }
 
+const CARD_WIDTH = 280;
+const CARD_HEIGHT = 200;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0B0B2B', paddingHorizontal: 20, paddingTop: 60 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
@@ -452,17 +560,88 @@ const styles = StyleSheet.create({
   reliveArrow: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(167,139,250,0.2)', justifyContent: 'center', alignItems: 'center' },
   reliveArrowText: { color: '#A78BFA', fontSize: 18, fontWeight: '600' },
 
-  recentSection: { marginTop: 24 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#FFF', marginBottom: 12 },
-  memoryCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  memoryCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  memoryDate: { fontSize: 12, color: '#6B6B8D' },
-  emotionBadge: { backgroundColor: 'rgba(167,139,250,0.2)', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 12 },
-  emotionText: { fontSize: 12, color: '#A78BFA', fontWeight: '600' },
-  memoryText: { fontSize: 14, color: '#CCC', lineHeight: 20 },
-  themesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
-  themeBadge: { backgroundColor: 'rgba(255,255,255,0.06)', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 8 },
-  themeText: { fontSize: 11, color: '#888' },
+  recentSection: { marginTop: 24, marginBottom: 24 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
+  sectionTitle: { fontSize: 20, fontWeight: '700', color: '#FFF' },
+  sectionSubtitle: { fontSize: 13, color: '#8888AA', fontStyle: 'italic' },
+  memoriesScrollContainer: { paddingHorizontal: 4, paddingVertical: 8 },
+  memoryCardContainer: { width: CARD_WIDTH, marginRight: 16 },
+  memoryCardWrapper: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 2,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  memoryCardGradient: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+  },
+  memoryCardOverlay: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  memoryCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emotionBadgeNew: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  emotionTextNew: {
+    fontSize: 12,
+    color: '#FFF',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  memoryDateNew: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '600',
+  },
+  memoryCardContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  memoryTextNew: {
+    fontSize: 15,
+    color: '#FFF',
+    lineHeight: 22,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  themesRowNew: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  themeBadgeNew: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  themeTextNew: {
+    fontSize: 11,
+    color: '#FFF',
+    fontWeight: '600',
+  },
   actionsSection: { flexDirection: 'row', gap: 12, marginTop: 24 },
   actionCard: { flex: 1 },
   actionGradient: { padding: 20, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
