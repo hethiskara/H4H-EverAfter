@@ -27,7 +27,6 @@ export default function HomeScreen() {
   const glowAnim = useRef(new Animated.Value(0)).current;
   const borderGlowAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
-  const [expandedCard, setExpandedCard] = useState<string | null>(null);
   
   useEffect(() => {
     Animated.loop(
@@ -241,26 +240,21 @@ export default function HomeScreen() {
                 { useNativeDriver: false }
               )}
               renderItem={({ item: memory, index }) => {
-                const isExpanded = expandedCard === memory.id;
-                const totalCards = recentMemories.length;
-                const centerIndex = Math.floor(totalCards / 2);
-                const offset = index - centerIndex;
-                
-                const fanRotation = isExpanded ? 0 : offset * 8;
-                const fanTranslateY = isExpanded ? 0 : Math.abs(offset) * 5;
-                const fanTranslateX = isExpanded ? 0 : offset * 15;
-                const cardScale = isExpanded ? 1.1 : 1;
-                const cardZIndex = isExpanded ? 1000 : totalCards - Math.abs(offset);
-
                 const inputRange = [
                   (index - 1) * (CARD_WIDTH + 16),
                   index * (CARD_WIDTH + 16),
                   (index + 1) * (CARD_WIDTH + 16),
                 ];
 
-                const scrollScale = scrollX.interpolate({
+                const scale = scrollX.interpolate({
                   inputRange,
-                  outputRange: [0.95, 1, 0.95],
+                  outputRange: [0.9, 1, 0.9],
+                  extrapolate: 'clamp',
+                });
+
+                const opacity = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.6, 1, 0.6],
                   extrapolate: 'clamp',
                 });
 
@@ -294,25 +288,13 @@ export default function HomeScreen() {
                     style={[
                       styles.memoryCardContainer,
                       {
-                        transform: [
-                          { scale: Animated.multiply(scrollScale, cardScale) },
-                          { rotate: `${fanRotation}deg` },
-                          { translateY: fanTranslateY },
-                          { translateX: fanTranslateX },
-                        ],
-                        zIndex: cardZIndex,
+                        transform: [{ scale }],
+                        opacity,
                       },
                     ]}
                   >
                     <TouchableOpacity
-                      onPress={() => {
-                        if (isExpanded) {
-                          setExpandedCard(null);
-                          handleSelectDate(memory.date);
-                        } else {
-                          setExpandedCard(memory.id);
-                        }
-                      }}
+                      onPress={() => handleSelectDate(memory.date)}
                       activeOpacity={0.9}
                     >
                       <Animated.View
@@ -351,7 +333,7 @@ export default function HomeScreen() {
                             </View>
 
                             <View style={styles.memoryCardContent}>
-                              <Text style={styles.memoryTextNew} numberOfLines={isExpanded ? undefined : 4}>
+                              <Text style={styles.memoryTextNew} numberOfLines={4}>
                                 {semanticSummary}
                               </Text>
                             </View>
