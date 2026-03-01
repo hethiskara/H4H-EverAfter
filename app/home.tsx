@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Animated } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Animated, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signOutUser, getCurrentUser } from '../src/config/firebase';
@@ -18,8 +18,12 @@ export default function HomeScreen() {
   const [reliveVisible, setReliveVisible] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [showFABMenu, setShowFABMenu] = useState(false);
   
   const pulseAnim = useState(new Animated.Value(1))[0];
+  const fabScale = useRef(new Animated.Value(1)).current;
+  const fabRotate = useRef(new Animated.Value(0)).current;
+  const menuAnim = useRef(new Animated.Value(0)).current;
   
   useEffect(() => {
     Animated.loop(
@@ -91,6 +95,49 @@ export default function HomeScreen() {
     return [...memories].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   }, [memories]);
 
+  const streak = useMemo(() => {
+    if (memories.length === 0) return 0;
+    const sortedDates = [...new Set(memories.map(m => m.date))].sort().reverse();
+    let currentStreak = 1;
+    const today = new Date().toISOString().split('T')[0];
+    if (sortedDates[0] !== today) return 0;
+    
+    for (let i = 0; i < sortedDates.length - 1; i++) {
+      const current = new Date(sortedDates[i]);
+      const next = new Date(sortedDates[i + 1]);
+      const diffDays = Math.floor((current.getTime() - next.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) currentStreak++;
+      else break;
+    }
+    return currentStreak;
+  }, [memories]);
+
+  const toggleFABMenu = () => {
+    const toValue = showFABMenu ? 0 : 1;
+    setShowFABMenu(!showFABMenu);
+    
+    Animated.parallel([
+      Animated.spring(menuAnim, {
+        toValue,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fabRotate, {
+        toValue: showFABMenu ? 0 : 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleQuickAdd = (type: 'text' | 'voice' | 'photo') => {
+    toggleFABMenu();
+    const today = new Date().toISOString().split('T')[0];
+    setSelectedDate(today);
+    setModalVisible(true);
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView 
@@ -98,7 +145,7 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A78BFA" />}
       >
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerLeft}>
             <Text style={styles.greeting}>Welcome back,</Text>
             <Text style={styles.title}>EverAfter</Text>
           </View>
@@ -106,6 +153,24 @@ export default function HomeScreen() {
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Streak & Quick Stats */}
+        {streak > 0 && (
+          <Animated.View style={styles.streakBanner}>
+            <LinearGradient
+              colors={['rgba(255,140,0,0.2)', 'rgba(255,69,0,0.1)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.streakGradient}
+            >
+              <Text style={styles.streakEmoji}>🔥</Text>
+              <View style={styles.streakContent}>
+                <Text style={styles.streakNumber}>{streak} Day Streak!</Text>
+                <Text style={styles.streakText}>Keep the momentum going</Text>
+              </View>
+            </LinearGradient>
+          </Animated.View>
+        )}
 
         {/* Relive Memories Button - Hero Feature */}
         <TouchableOpacity 
@@ -205,12 +270,25 @@ export default function HomeScreen() {
 
         <View style={styles.statsSection}>
           <View style={styles.statCard}>
+            <View style={styles.statIconContainer}>
+              <Text style={styles.statIcon}>📝</Text>
+            </View>
             <Text style={styles.statNumber}>{memories.length}</Text>
             <Text style={styles.statLabel}>This Month</Text>
           </View>
           <View style={styles.statCard}>
+            <View style={styles.statIconContainer}>
+              <Text style={styles.statIcon}>📅</Text>
+            </View>
             <Text style={styles.statNumber}>{memoriesDates.size}</Text>
             <Text style={styles.statLabel}>Days Captured</Text>
+          </View>
+          <View style={styles.statCard}>
+            <View style={styles.statIconContainer}>
+              <Text style={styles.statIcon}>⚡</Text>
+            </View>
+            <Text style={styles.statNumber}>{streak}</Text>
+            <Text style={styles.statLabel}>Day Streak</Text>
           </View>
         </View>
 
@@ -229,17 +307,115 @@ export default function HomeScreen() {
         visible={reliveVisible}
         onClose={() => setReliveVisible(false)}
       />
+
+      {/* Floating Action Button */}
+      <Animated.View 
+        style={[
+          styles.fabContainer,
+          {
+            transform: [{
+              rotate: fabRotate.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0deg', '45deg'],
+              }),
+            }],
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={toggleFABMenu}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={['#A78BFA', '#8B5CF6', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fabGradient}
+          >
+            <Text style={styles.fabIcon}>+</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* FAB Menu Options */}
+      {showFABMenu && (
+        <Animated.View 
+          style={[
+            styles.fabMenu,
+            {
+              opacity: menuAnim,
+              transform: [{
+                translateY: menuAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                }),
+              }],
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.fabMenuItem}
+            onPress={() => handleQuickAdd('text')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.fabMenuButton, { backgroundColor: '#8B5CF6' }]}>
+              <Text style={styles.fabMenuIcon}>📝</Text>
+            </View>
+            <Text style={styles.fabMenuLabel}>Text</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.fabMenuItem}
+            onPress={() => handleQuickAdd('voice')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.fabMenuButton, { backgroundColor: '#EC4899' }]}>
+              <Text style={styles.fabMenuIcon}>🎤</Text>
+            </View>
+            <Text style={styles.fabMenuLabel}>Voice</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.fabMenuItem}
+            onPress={() => handleQuickAdd('photo')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.fabMenuButton, { backgroundColor: '#F59E0B' }]}>
+              <Text style={styles.fabMenuIcon}>📷</Text>
+            </View>
+            <Text style={styles.fabMenuLabel}>Photo</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {/* FAB Menu Backdrop */}
+      {showFABMenu && (
+        <TouchableOpacity
+          style={styles.fabBackdrop}
+          activeOpacity={1}
+          onPress={toggleFABMenu}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0B0B2B', paddingHorizontal: 20, paddingTop: 60 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  headerLeft: { flex: 1 },
   greeting: { fontSize: 14, color: '#8888AA', marginBottom: 2 },
   title: { fontSize: 28, fontWeight: '700', color: '#FFF' },
   signOut: { padding: 10, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   signOutText: { color: '#8888AA', fontSize: 13 },
+  
+  streakBanner: { marginBottom: 20 },
+  streakGradient: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,140,0,0.3)' },
+  streakEmoji: { fontSize: 32, marginRight: 12 },
+  streakContent: { flex: 1 },
+  streakNumber: { fontSize: 18, fontWeight: '700', color: '#FF8C00', marginBottom: 2 },
+  streakText: { fontSize: 12, color: '#FFA500' },
   
   reliveButton: { marginBottom: 20 },
   reliveGradient: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(167,139,250,0.3)' },
@@ -271,6 +447,21 @@ const styles = StyleSheet.create({
   actionSub: { fontSize: 11, color: '#8888AA' },
   statsSection: { flexDirection: 'row', gap: 12, marginTop: 20 },
   statCard: { flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 14, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  statNumber: { fontSize: 28, fontWeight: '700', color: '#A78BFA' },
-  statLabel: { fontSize: 12, color: '#6B6B8D', marginTop: 4 },
+  statIconContainer: { marginBottom: 8 },
+  statIcon: { fontSize: 24 },
+  statNumber: { fontSize: 24, fontWeight: '700', color: '#A78BFA' },
+  statLabel: { fontSize: 11, color: '#6B6B8D', marginTop: 4 },
+  
+  fabContainer: { position: 'absolute', bottom: 30, right: 20, zIndex: 1000 },
+  fab: { width: 64, height: 64, borderRadius: 32, elevation: 8, shadowColor: '#A78BFA', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
+  fabGradient: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
+  fabIcon: { fontSize: 32, color: '#FFF', fontWeight: '300' },
+  
+  fabMenu: { position: 'absolute', bottom: 110, right: 20, zIndex: 999, gap: 16 },
+  fabMenuItem: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  fabMenuButton: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
+  fabMenuIcon: { fontSize: 24 },
+  fabMenuLabel: { fontSize: 14, fontWeight: '600', color: '#FFF', backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  
+  fabBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 998 },
 });
