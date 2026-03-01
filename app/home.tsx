@@ -29,7 +29,9 @@ export default function HomeScreen() {
   const menuAnim = useRef(new Animated.Value(0)).current;
   const scrollX = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const borderGlowAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
   
   useEffect(() => {
     Animated.loop(
@@ -52,6 +54,14 @@ export default function HomeScreen() {
           useNativeDriver: false,
         }),
       ])
+    ).start();
+
+    Animated.loop(
+      Animated.timing(borderGlowAnim, {
+        toValue: 1,
+        duration: 1500,
+        useNativeDriver: false,
+      })
     ).start();
   }, []);
 
@@ -260,27 +270,38 @@ export default function HomeScreen() {
                 { useNativeDriver: false }
               )}
               renderItem={({ item: memory, index }) => {
+                const isExpanded = expandedCard === memory.id;
+                const totalCards = recentMemories.length;
+                const centerIndex = Math.floor(totalCards / 2);
+                const offset = index - centerIndex;
+                
+                const fanRotation = isExpanded ? 0 : offset * 8;
+                const fanTranslateY = isExpanded ? 0 : Math.abs(offset) * 5;
+                const fanTranslateX = isExpanded ? 0 : offset * 15;
+                const cardScale = isExpanded ? 1.1 : 1;
+                const cardZIndex = isExpanded ? 1000 : totalCards - Math.abs(offset);
+
                 const inputRange = [
                   (index - 1) * (CARD_WIDTH + 16),
                   index * (CARD_WIDTH + 16),
                   (index + 1) * (CARD_WIDTH + 16),
                 ];
 
-                const scale = scrollX.interpolate({
+                const scrollScale = scrollX.interpolate({
                   inputRange,
-                  outputRange: [0.9, 1, 0.9],
+                  outputRange: [0.95, 1, 0.95],
                   extrapolate: 'clamp',
                 });
 
-                const opacity = scrollX.interpolate({
+                const isActive = scrollX.interpolate({
                   inputRange,
-                  outputRange: [0.6, 1, 0.6],
+                  outputRange: [0, 1, 0],
                   extrapolate: 'clamp',
                 });
 
-                const glowColor = glowAnim.interpolate({
+                const borderGlowPosition = borderGlowAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: ['rgba(167,139,250,0.3)', 'rgba(236,72,153,0.5)'],
+                  outputRange: ['0%', '100%'],
                 });
 
                 const emotionGradients: { [key: string]: [string, string, string] } = {
@@ -294,27 +315,40 @@ export default function HomeScreen() {
                 };
 
                 const gradient: [string, string, string] = emotionGradients[memory.emotion?.toLowerCase() || 'default'] || emotionGradients.default;
+                
+                const semanticSummary = memory.semantics || memory.rawText.substring(0, 100) + '...';
 
                 return (
                   <Animated.View
                     style={[
                       styles.memoryCardContainer,
                       {
-                        transform: [{ scale }],
-                        opacity,
+                        transform: [
+                          { scale: Animated.multiply(scrollScale, cardScale) },
+                          { rotate: `${fanRotation}deg` },
+                          { translateY: fanTranslateY },
+                          { translateX: fanTranslateX },
+                        ],
+                        zIndex: cardZIndex,
                       },
                     ]}
                   >
                     <TouchableOpacity
-                      onPress={() => handleSelectDate(memory.date)}
+                      onPress={() => {
+                        if (isExpanded) {
+                          setExpandedCard(null);
+                          handleSelectDate(memory.date);
+                        } else {
+                          setExpandedCard(memory.id);
+                        }
+                      }}
                       activeOpacity={0.9}
                     >
                       <Animated.View
                         style={[
                           styles.memoryCardWrapper,
                           {
-                            borderColor: glowColor,
-                            shadowColor: glowColor,
+                            shadowOpacity: Animated.multiply(isActive, 0.6),
                           },
                         ]}
                       >
@@ -324,6 +358,15 @@ export default function HomeScreen() {
                           end={{ x: 1, y: 1 }}
                           style={styles.memoryCardGradient}
                         >
+                          <Animated.View
+                            style={[
+                              styles.borderGlow,
+                              {
+                                opacity: isActive,
+                                left: borderGlowPosition,
+                              },
+                            ]}
+                          />
                           <View style={styles.memoryCardOverlay}>
                             <View style={styles.memoryCardTop}>
                               {memory.emotion && (
@@ -337,8 +380,8 @@ export default function HomeScreen() {
                             </View>
 
                             <View style={styles.memoryCardContent}>
-                              <Text style={styles.memoryTextNew} numberOfLines={4}>
-                                {memory.rawText}
+                              <Text style={styles.memoryTextNew} numberOfLines={isExpanded ? undefined : 4}>
+                                {semanticSummary}
                               </Text>
                             </View>
 
@@ -456,7 +499,7 @@ export default function HomeScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.fabGradient}
           >
-            <Text style={styles.fabIcon}>{showFABMenu ? '×' : '+'}</Text>
+            <Text style={styles.fabIcon}>+</Text>
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
@@ -569,11 +612,25 @@ const styles = StyleSheet.create({
   memoryCardWrapper: {
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 2,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.6,
     shadowRadius: 16,
     elevation: 10,
+  },
+  borderGlow: {
+    position: 'absolute',
+    top: 0,
+    width: 100,
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    zIndex: 10,
   },
   memoryCardGradient: {
     width: CARD_WIDTH,
@@ -657,9 +714,9 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: '#6B6B8D', marginTop: 4 },
   
   fabContainer: { position: 'absolute', bottom: 30, right: 20, zIndex: 1000 },
-  fab: { width: 64, height: 64, borderRadius: 32, elevation: 8, shadowColor: '#A78BFA', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
-  fabGradient: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
-  fabIcon: { fontSize: 32, color: '#FFF', fontWeight: '300' },
+  fab: { width: 56, height: 56, borderRadius: 28, elevation: 8, shadowColor: '#A78BFA', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
+  fabGradient: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
+  fabIcon: { fontSize: 28, color: '#FFF', fontWeight: '300' },
   
   fabMenu: { position: 'absolute', bottom: 110, right: 20, zIndex: 999, gap: 16 },
   fabMenuItem: { alignItems: 'center', flexDirection: 'row', gap: 12 },
