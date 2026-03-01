@@ -25,7 +25,6 @@ export default function HomeScreen() {
   const pulseAnim = useState(new Animated.Value(1))[0];
   const scrollX = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
-  const borderGlowAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
   
   useEffect(() => {
@@ -51,13 +50,6 @@ export default function HomeScreen() {
       ])
     ).start();
 
-    Animated.loop(
-      Animated.timing(borderGlowAnim, {
-        toValue: 1,
-        duration: 1500,
-        useNativeDriver: false,
-      })
-    ).start();
   }, []);
 
   useEffect(() => {
@@ -258,16 +250,6 @@ export default function HomeScreen() {
                   extrapolate: 'clamp',
                 });
 
-                const isActive = scrollX.interpolate({
-                  inputRange,
-                  outputRange: [0, 1, 0],
-                  extrapolate: 'clamp',
-                });
-
-                const borderGlowPosition = borderGlowAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                });
 
                 const emotionGradients: { [key: string]: [string, string, string] } = {
                   happy: ['#FFD700', '#FFA500', '#FF8C00'],
@@ -297,29 +279,13 @@ export default function HomeScreen() {
                       onPress={() => handleSelectDate(memory.date)}
                       activeOpacity={0.9}
                     >
-                      <Animated.View
-                        style={[
-                          styles.memoryCardWrapper,
-                          {
-                            shadowOpacity: Animated.multiply(isActive, 0.6),
-                          },
-                        ]}
-                      >
+                      <View style={styles.memoryCardWrapper}>
                         <LinearGradient
                           colors={gradient}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
                           style={styles.memoryCardGradient}
                         >
-                          <Animated.View
-                            style={[
-                              styles.borderGlow,
-                              {
-                                opacity: isActive,
-                                left: borderGlowPosition,
-                              },
-                            ]}
-                          />
                           <View style={styles.memoryCardOverlay}>
                             <View style={styles.memoryCardTop}>
                               {memory.emotion && (
@@ -349,7 +315,7 @@ export default function HomeScreen() {
                             )}
                           </View>
                         </LinearGradient>
-                      </Animated.View>
+                      </View>
                     </TouchableOpacity>
                   </Animated.View>
                 );
@@ -483,18 +449,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 16,
     elevation: 10,
-  },
-  borderGlow: {
-    position: 'absolute',
-    top: 0,
-    width: 100,
-    height: '100%',
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    shadowColor: '#FFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
-    zIndex: 10,
   },
   memoryCardGradient: {
     width: CARD_WIDTH,
