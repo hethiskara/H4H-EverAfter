@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signOutUser, getCurrentUser } from '../src/config/firebase';
 import Calendar from '../src/components/Calendar';
 import MemoryModal from '../src/components/MemoryModal';
+import ReliveMemories from '../src/components/ReliveMemories';
 import { getMemoriesForMonth } from '../src/services/memoryService';
 import { Memory } from '../src/types/memory';
 
@@ -14,8 +15,20 @@ export default function HomeScreen() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [reliveVisible, setReliveVisible] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  
+  const pulseAnim = useState(new Animated.Value(1))[0];
+  
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.05, duration: 1500, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
 
   useEffect(() => {
     console.log('[Home] Mounted');
@@ -94,6 +107,33 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Relive Memories Button - Hero Feature */}
+        <TouchableOpacity 
+          style={styles.reliveButton} 
+          activeOpacity={0.9}
+          onPress={() => setReliveVisible(true)}
+        >
+          <LinearGradient
+            colors={['rgba(167,139,250,0.25)', 'rgba(139,92,246,0.15)', 'rgba(91,79,196,0.2)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.reliveGradient}
+          >
+            <Animated.View style={[styles.reliveOrb, { transform: [{ scale: pulseAnim }] }]}>
+              <View style={styles.reliveOrbInner}>
+                <Text style={styles.reliveOrbIcon}>🎙</Text>
+              </View>
+            </Animated.View>
+            <View style={styles.reliveContent}>
+              <Text style={styles.reliveTitle}>Relive Your Memories</Text>
+              <Text style={styles.reliveSub}>Ask anything about your past and hear your story</Text>
+            </View>
+            <View style={styles.reliveArrow}>
+              <Text style={styles.reliveArrowText}>→</Text>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+
         <Calendar
           year={currentDate.getFullYear()}
           month={currentDate.getMonth()}
@@ -140,7 +180,7 @@ export default function HomeScreen() {
         )}
 
         <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.actionCard} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.actionCard} activeOpacity={0.8} onPress={() => router.push('/lifeline')}>
             <LinearGradient
               colors={['rgba(91,79,196,0.2)', 'rgba(139,92,246,0.1)']}
               style={styles.actionGradient}
@@ -151,7 +191,7 @@ export default function HomeScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionCard} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.actionCard} activeOpacity={0.8} onPress={() => router.push('/highlights')}>
             <LinearGradient
               colors={['rgba(236,72,153,0.2)', 'rgba(139,92,246,0.1)']}
               style={styles.actionGradient}
@@ -184,6 +224,11 @@ export default function HomeScreen() {
         onClose={handleModalClose}
         onSaved={handleMemorySaved}
       />
+
+      <ReliveMemories
+        visible={reliveVisible}
+        onClose={() => setReliveVisible(false)}
+      />
     </View>
   );
 }
@@ -195,6 +240,18 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '700', color: '#FFF' },
   signOut: { padding: 10, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   signOutText: { color: '#8888AA', fontSize: 13 },
+  
+  reliveButton: { marginBottom: 20 },
+  reliveGradient: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(167,139,250,0.3)' },
+  reliveOrb: { marginRight: 14 },
+  reliveOrbInner: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(167,139,250,0.3)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(167,139,250,0.5)' },
+  reliveOrbIcon: { fontSize: 24 },
+  reliveContent: { flex: 1 },
+  reliveTitle: { fontSize: 16, fontWeight: '700', color: '#FFF', marginBottom: 2 },
+  reliveSub: { fontSize: 12, color: '#8888AA', lineHeight: 16 },
+  reliveArrow: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(167,139,250,0.2)', justifyContent: 'center', alignItems: 'center' },
+  reliveArrowText: { color: '#A78BFA', fontSize: 18, fontWeight: '600' },
+
   recentSection: { marginTop: 24 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#FFF', marginBottom: 12 },
   memoryCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },

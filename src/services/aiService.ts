@@ -132,3 +132,133 @@ Return ONLY this JSON (no markdown, no extra text):
     throw error;
   }
 }
+
+const HAPPY_EMOTIONS = new Set(['Joy', 'Love', 'Gratitude', 'Pride', 'Excitement', 'Peace', 'Hope', 'Contentment', 'Confidence', 'Nostalgia', 'Independence']);
+
+export function isHappyEmotion(emotion: string | null | undefined): boolean {
+  return !!emotion && HAPPY_EMOTIONS.has(emotion);
+}
+
+export async function getEmbedding(text: string): Promise<number[]> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.log('[AI] No API key for embeddings');
+    return [];
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: text.slice(0, 8000),
+      }),
+    });
+
+    const data = await response.json();
+    if (data.error) {
+      console.log('[AI] Embedding error:', data.error.message);
+      return [];
+    }
+
+    return data.data?.[0]?.embedding || [];
+  } catch (err) {
+    console.log('[AI] Embedding failed:', err);
+    return [];
+  }
+}
+
+export async function getEmbeddingsBatch(texts: string[]): Promise<number[][]> {
+  const apiKey = getApiKey();
+  if (!apiKey || texts.length === 0) {
+    return texts.map(() => []);
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: texts.map(t => t.slice(0, 8000)),
+      }),
+    });
+
+    const data = await response.json();
+    if (data.error) {
+      console.log('[AI] Batch embedding error:', data.error.message);
+      return texts.map(() => []);
+    }
+
+    const embeddings: number[][] = texts.map(() => []);
+    for (const item of data.data || []) {
+      embeddings[item.index] = item.embedding;
+    }
+    return embeddings;
+  } catch (err) {
+    console.log('[AI] Batch embedding failed:', err);
+    return texts.map(() => []);
+  }
+}
+
+export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
+  
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  
+  const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
+  return magnitude === 0 ? 0 : dotProduct / magnitude;
+}
+
+export async function generateLifeSummary(memorySummaries: string[]): Promise<string> {
+  const apiKey = getApiKey();
+  if (!apiKey || memorySummaries.length === 0) {
+    return 'Add more memories to see your story unfold.';
+  }
+
+  const combined = memorySummaries.slice(0, 50).join('\n• ');
+  const prompt = `Based on these memory summaries from someone's life journal, write ONE short sentence (max 25 words) that captures the overall theme of their life so far. Write in second person ("Your life..."). Be warm and insightful. Do not use quotes.
+
+Memory summaries:
+• ${combined}
+
+One sentence:`;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.6,
+        max_tokens: 80,
+      }),
+    });
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content?.trim();
+    return text || 'Your story is still being written.';
+  } catch (err) {
+    console.log('[AI] Life summary failed:', err);
+    return 'Your story is still being written.';
+  }
+}
