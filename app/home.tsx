@@ -2,10 +2,12 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Animated, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { signOutUser, getCurrentUser } from '../src/config/firebase';
 import Calendar from '../src/components/Calendar';
 import MemoryModal from '../src/components/MemoryModal';
 import ReliveMemories from '../src/components/ReliveMemories';
+import OnboardingGuide from '../src/components/OnboardingGuide';
 import { getMemoriesForMonth } from '../src/services/memoryService';
 import { Memory } from '../src/types/memory';
 
@@ -19,6 +21,7 @@ export default function HomeScreen() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [showFABMenu, setShowFABMenu] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   
   const pulseAnim = useState(new Animated.Value(1))[0];
   const fabScale = useRef(new Animated.Value(1)).current;
@@ -37,7 +40,18 @@ export default function HomeScreen() {
   useEffect(() => {
     console.log('[Home] Mounted');
     getCurrentUser().then(u => setUserEmail(u?.email || ''));
+    
+    AsyncStorage.getItem('hasSeenOnboarding').then(value => {
+      if (!value) {
+        setTimeout(() => setShowOnboarding(true), 500);
+      }
+    });
   }, []);
+
+  const handleOnboardingComplete = async () => {
+    setShowOnboarding(false);
+    await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+  };
 
   const loadMemories = useCallback(async () => {
     const year = currentDate.getFullYear();
@@ -250,7 +264,9 @@ export default function HomeScreen() {
               colors={['rgba(91,79,196,0.2)', 'rgba(139,92,246,0.1)']}
               style={styles.actionGradient}
             >
-              <Text style={styles.actionIcon}>🌌</Text>
+              <Animated.View style={[styles.actionIconContainer, { transform: [{ rotateY: pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: ['0deg', '15deg'] }) }] }]}>
+                <Text style={styles.actionIcon}>🌌</Text>
+              </Animated.View>
               <Text style={styles.actionTitle}>Explore My Life</Text>
               <Text style={styles.actionSub}>View your LifeLine</Text>
             </LinearGradient>
@@ -261,7 +277,9 @@ export default function HomeScreen() {
               colors={['rgba(236,72,153,0.2)', 'rgba(139,92,246,0.1)']}
               style={styles.actionGradient}
             >
-              <Text style={styles.actionIcon}>🎞</Text>
+              <Animated.View style={[styles.actionIconContainer, { transform: [{ scale: pulseAnim }, { rotateZ: pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: ['0deg', '5deg'] }) }] }]}>
+                <Text style={styles.actionIcon}>🎞</Text>
+              </Animated.View>
               <Text style={styles.actionTitle}>Memory Highlights</Text>
               <Text style={styles.actionSub}>Your story so far</Text>
             </LinearGradient>
@@ -333,7 +351,7 @@ export default function HomeScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.fabGradient}
           >
-            <Text style={styles.fabIcon}>+</Text>
+            <Text style={styles.fabIcon}>{showFABMenu ? '×' : '+'}</Text>
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
@@ -397,6 +415,12 @@ export default function HomeScreen() {
           onPress={toggleFABMenu}
         />
       )}
+
+      {/* Onboarding Guide */}
+      <OnboardingGuide
+        visible={showOnboarding}
+        onComplete={handleOnboardingComplete}
+      />
     </View>
   );
 }
@@ -442,7 +466,8 @@ const styles = StyleSheet.create({
   actionsSection: { flexDirection: 'row', gap: 12, marginTop: 24 },
   actionCard: { flex: 1 },
   actionGradient: { padding: 20, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  actionIcon: { fontSize: 32, marginBottom: 8 },
+  actionIconContainer: { marginBottom: 8 },
+  actionIcon: { fontSize: 40 },
   actionTitle: { fontSize: 14, fontWeight: '600', color: '#FFF', marginBottom: 2 },
   actionSub: { fontSize: 11, color: '#8888AA' },
   statsSection: { flexDirection: 'row', gap: 12, marginTop: 20 },
